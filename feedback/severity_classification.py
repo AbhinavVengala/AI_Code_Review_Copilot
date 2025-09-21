@@ -4,6 +4,6 @@ SEVERITY_ICONS = {
     "LOW": "🟡"
 }
 
-def provide_feedback(issue, severity):
+def provide_feedback(issue: str, severity: str):
     icon = SEVERITY_ICONS.get(severity, "⚪")
     return f"{icon} [{severity}] {issue}"
