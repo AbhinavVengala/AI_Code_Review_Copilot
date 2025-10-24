@@ -1,7 +1,7 @@
 from dotenv import load_dotenv
 load_dotenv()
 
-import os, sys, subprocess, json
+import os, sys, subprocess, json, tempfile, shutil, requests
 from pathlib import Path
 from datetime import datetime
 
@@ -25,33 +25,44 @@ if not os.path.exists(FEEDBACK_FILE):
         json.dump({}, f)
 
 
+LANGUAGE_TOOLS = {
+    "python": {
+        "extensions": [".py"],
+        "static_analyzer": "flake8",
+        "security_scanner": "bandit",
+    },
+}
+
 def run_flake8(file_path):
     """Run flake8 static analysis"""
     result = subprocess.run(
         [sys.executable, "-m", "flake8", file_path, "--format=%(row)d:%(col)d: %(text)s"],
         capture_output=True, text=True
     )
+    if result.returncode != 0 and result.stdout.strip() == "":
+        return []
     issues = []
     for line in result.stdout.strip().split("\n"):
         if line:
-            parts = line.split(" ", 1)
-            location = parts[0]
-            text = parts[1] if len(parts) > 1 else ""
-            row, col = location.split(":")[0:2]
-            issues.append({"line": int(row), "col": int(col), "text": text})
+            try:
+                parts = line.split(":", 2)
+                if len(parts) == 3:
+                    issues.append({"line": int(parts[0]), "col": int(parts[1]), "text": parts[2].strip()})
+            except (ValueError, IndexError):
+                continue
     return issues
 
 def run_bandit(file_path):
     """Run bandit security analysis"""
     result = subprocess.run(
-        [sys.executable, "-m", "bandit", "-q", "-r", file_path, "-f", "json"],
+        [sys.executable, "-m", "bandit", "-q", file_path, "-f", "json"],
         capture_output=True, text=True
     )
     try:
         data = json.loads(result.stdout)
-        return data.get("results", [])
-    except:
+    except json.JSONDecodeError:
         return []
+    return data.get("results", [])
 
 def extract_snippet(file_path, line_no, context=2):
     """Extract raw code snippet (no markdown fences)."""
@@ -85,26 +96,64 @@ def save_human_feedback(file_path, issue, feedback):
         json.dump(data, f, indent=2)
         f.truncate()
 
+def post_results_to_dashboard(results_data):
+    """Posts the JSON analysis results to a central dashboard API."""
+    api_endpoint = os.getenv("DASHBOARD_API_ENDPOINT")
+    api_key = os.getenv("DASHBOARD_API_KEY")
+
+    if not api_endpoint or not api_key:
+        return
+
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    payload = list(results_data.values())
+
+    try:
+        print("📈 Posting results to dashboard...")
+        response = requests.post(api_endpoint, json=payload, headers=headers, timeout=15)
+        response.raise_for_status()
+        print("✅ Results successfully posted to dashboard.")
+    except requests.exceptions.RequestException as e:
+        print(f"⚠️ Warning: Could not post results to dashboard: {e}")
+
 
 def analyze_file(file_path):
-    flake8_issues = run_flake8(file_path)
-    bandit_issues = run_bandit(file_path)
+    file_extension = os.path.splitext(file_path)[1]
+    language = None
+    for lang, config in LANGUAGE_TOOLS.items():
+        if file_extension in config["extensions"]:
+            language = lang
+            break
 
-    with open(file_path, "r") as f:
+    if not language:
+        return None
+
+
+    static_issues = []
+    security_issues = []
+    ast_issues = []
+    pattern_issues = []
+
+    with open(file_path, "r", encoding="utf-8") as f:
         code = f.read()
 
-    ast_issues = analyze_code(code)
-    pattern_issues = detect_patterns(code)
+    if language == "python":
+        static_issues = run_flake8(file_path)
+        security_issues = run_bandit(file_path)
+        ast_issues = analyze_code(code)
+        pattern_issues = detect_patterns(code)
 
-    combined_issues = flake8_issues + ast_issues + pattern_issues
+    combined_issues = static_issues + ast_issues + pattern_issues
     for issue in combined_issues:
         issue["severity"] = predict_bug_risk(issue.get("text", ""))
 
     best_practices = recommend_best_practices(code)
-
     ai_feedback = ai_review(code[:1500])
-    return combined_issues, bandit_issues, ai_feedback, best_practices
-
+    return {
+        "static_issues": combined_issues,
+        "security": security_issues,
+        "ai_feedback": ai_feedback,
+        "best_practices": best_practices
+    }
 
 
 def generate_report(results):
@@ -116,51 +165,50 @@ def generate_report(results):
     total_static = 0
     total_security = 0
 
-    for file_path, (static_issues, bandit_issues, ai_feedback, best_practices) in results.items():
-        report.append(f"## 📂 File: `{file_path}`")
+    for file_path, analysis_data in results.items():
+        report.append(f"## 📂 File: `{analysis_data['relative_path']}`")
 
-        report.append("### ✅ Static Analysis + ML Severity")
-        if static_issues:
+        report.append("\n### ✅ Static Analysis + ML Severity")
+        if analysis_data["static_issues"]:
             report.append("| Line | Col | Issue | Severity | Snippet |")
             report.append("|------|-----|-------|---------|---------|")
-            for issue in static_issues[:10]:
+            for issue in analysis_data["static_issues"][:10]:
                 severity = issue.get("severity", "LOW")
-                icon_text = provide_feedback(issue.get("text", ""), severity)
+                icon_text = provide_feedback(issue.get("text", ""), severity) # This function returns a string with icon and severity
                 report.append(f"| {issue.get('line','-')} | {issue.get('col','-')} | {issue.get('text','')} | {icon_text} |")
-                snippet = extract_snippet(file_path, issue.get("line", 1))
+                snippet = extract_snippet(file_path, int(issue.get("line", 1)))
                 if snippet:
                     report.append(f"\n```python\n{snippet}\n```\n")
-            total_static += len(static_issues)
+            total_static += len(analysis_data["static_issues"])
         else:
             report.append("- No static issues found.")
 
         report.append("\n### 🔒 Security Analysis")
-        if bandit_issues:
+        if analysis_data["security"]:
             report.append("| Severity | Issue | Line | Snippet |")
             report.append("|----------|-------|------|---------|")
-            for issue in bandit_issues[:5]:
+            for issue in analysis_data["security"][:5]:
                 icon = SEVERITY_ICONS.get(issue["issue_severity"], "⚠️")
                 snippet = extract_snippet(file_path, issue["line_number"])
                 report.append(f"| {icon} {issue['issue_severity']} | {issue['issue_text']} | {issue['line_number']} | {snippet} |")
-                snippet = extract_snippet(file_path, issue.get("line", 1))
                 if snippet:
                     report.append(f"\n```python\n{snippet}\n```\n")
-            total_security += len(bandit_issues)
+            total_security += len(analysis_data["security"])
         else:
             report.append("- No security issues found.")
 
         report.append("\n### 📘 Best Practice Recommendations")
-        if best_practices:
-            if not isinstance(best_practices, list):
-                best_practices = [best_practices]
+        if analysis_data["best_practices"]:
+            if not isinstance(analysis_data["best_practices"], list):
+                analysis_data["best_practices"] = [analysis_data["best_practices"]]
             
-            for rec in best_practices:
+            for rec in analysis_data["best_practices"]:
                 report.append(f"- {rec}")
         else:
             report.append("- No best practice suggestions.")
 
         report.append("\n### 🤖 AI Suggestions")
-        report.append(ai_feedback or "No AI suggestions generated.")
+        report.append(analysis_data["ai_feedback"] or "No AI suggestions generated.")
         report.append("\n---\n")
 
     report.append("## 📌 Summary")
@@ -173,26 +221,61 @@ def generate_report(results):
 def gather_files(path):
     p = Path(path)
     if p.is_file():
-        return [str(p)]
+        for lang_config in LANGUAGE_TOOLS.values():
+            if p.suffix in lang_config["extensions"]:
+                return [str(p)]
+        return []
     else:
-        return [str(f) for f in p.rglob("*.py")]
+        all_files = [str(f) for f in p.rglob("*") if not f.is_dir()]
+        return [f for f in all_files if os.path.splitext(f)[1] in [ext for conf in LANGUAGE_TOOLS.values() for ext in conf['extensions']]]
 
 def main(target_path, git_commit=None):
-    if git_commit:
-        files = get_changed_files(target_path, git_commit)
-    else:
-        files = gather_files(target_path)
+    analysis_path = target_path
+    temp_dir = None
 
-    results = {}
-    for file_path in files:
-        static_issues, bandit_issues, ai_feedback, best_practices = analyze_file(file_path)
-        results[file_path] = (static_issues, bandit_issues, ai_feedback, best_practices)
+    try:
+        if target_path.startswith(("http://", "https://")) and "github.com" in target_path:
+            temp_dir = tempfile.mkdtemp(prefix="ai_code_review_")
+            print(f"Cloning repository from {target_path} into {temp_dir}...")
+            try:
+                subprocess.run(
+                    ["git", "clone", "--depth", "1", target_path, "."],
+                    check=True, capture_output=True, text=True, cwd=temp_dir
+                )
+                analysis_path = temp_dir
+            except subprocess.CalledProcessError as e:
+                print(f"❌ Failed to clone repository: {e.stderr}")
+                return
 
-    report = generate_report(results)
-    output_file = "review_report.md"
-    with open(output_file, "w", encoding="utf-8") as f:
-        f.write(report)
-    print(f"\n✅ Review completed. Report saved to {output_file}")
+        if git_commit:
+            files = get_changed_files(analysis_path, git_commit)
+        else:
+            files = gather_files(analysis_path)
+
+        if not files:
+            print(f"❌ No supported files found in the target path: {analysis_path}")
+            print("Please check the repository URL or local path.")
+            return
+
+        results = {}
+        for file_path in files:
+            print(f"🔎 Analyzing {os.path.basename(file_path)}...")
+            relative_path = os.path.relpath(file_path, analysis_path) if temp_dir else file_path
+            if (analysis_results := analyze_file(file_path)):
+                analysis_results["relative_path"] = relative_path
+                results[file_path] = analysis_results
+
+        report = generate_report(results)
+        output_file = "review_report.md"
+        with open(output_file, "w", encoding="utf-8") as f:
+            f.write(report)
+        print(f"\n✅ Review completed. Report saved to {output_file}")
+
+        post_results_to_dashboard(results)
+
+    finally:
+        if temp_dir:
+            shutil.rmtree(temp_dir)
 
 
 if __name__ == "__main__":

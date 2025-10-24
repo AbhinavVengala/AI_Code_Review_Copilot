@@ -1,0 +1,24 @@
+name: 'AI Code Review Copilot Action'
+description: 'Runs a comprehensive AI-powered code review using flake8, bandit, and Gemini.'
+author: 'codewithabhi8'
+
+inputs:
+  gemini_api_key:
+    description: 'Google Gemini API key for AI-powered suggestions.'
+    required: true
+  target_path:
+    description: 'The file or directory to analyze.'
+    required: true
+    default: '.'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install Python dependencies
+      run: pip install -r ${{ github.action_path }}/requirements.txt
+      shell: bash
+    - name: Run analysis
+      run: python ${{ github.action_path }}/main.py ${{ inputs.target_path }}
+      shell: bash
+      env:
+        GEMINI_API_KEY: ${{ inputs.gemini_api_key }}
