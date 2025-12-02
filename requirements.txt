@@ -2,3 +2,13 @@ bandit
 flake8
 langchain-google-genai
 python-dotenv
+chromadb
+radon
+langchain-community
+langchain
+langchain-text-splitters
+fastapi
+uvicorn
+PyGithub
+langchain-openai
+python-multipart

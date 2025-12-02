@@ -1,134 +1,131 @@
 # 🤖 AI Code Review Copilot
 
-**AI-powered assistant for automated code reviews with ML, security analysis, Git integration, and continuous feedback.**
+**An intelligent, full-stack code review assistant that combines Static Analysis, Security Scanning, and LLM-based insights.**
+
+![Python](https://img.shields.io/badge/Python-3.9%2B-blue)
+![FastAPI](https://img.shields.io/badge/FastAPI-Backend-green)
+![Next.js](https://img.shields.io/badge/Next.js-Dashboard-black)
+![Docker](https://img.shields.io/badge/Docker-Ready-blue)
 
 ---
 
-An intelligent code review assistant that automates the process of code analysis by combining static analysis, security scanning, machine learning, and Large Language Models (LLMs) to provide comprehensive feedback. This tool is designed to be a copilot for developers, helping to identify potential issues, improve code quality, and enforce best practices before human review.
+## 🚀 What is this?
 
-## ✨ Features
+The **AI Code Review Copilot** is a next-generation developer tool designed to automate code quality checks. Unlike standard linters, it uses **Retrieval-Augmented Generation (RAG)** to understand the *context* of your project, providing deeper insights than simple syntax checking.
 
--   **Multi-faceted Analysis**: Integrates multiple analysis techniques for a holistic review:
-    -   **Static Analysis**: Uses `flake8` for style and error checking.
-    -   **Security Scanning**: Uses `bandit` to find common security vulnerabilities.
-    -   **Advanced Code Analysis**: Employs Abstract Syntax Tree (AST) parsing and pattern recognition for deeper insights.
--   **AI-Powered Suggestions**: Leverages the Google Gemini Pro model to provide contextual, AI-generated feedback and improvement suggestions.
--   **ML-Powered Severity Prediction**: A built-in machine learning model predicts the severity and risk of identified issues.
--   **Comprehensive Reporting**: Generates a clean, detailed Markdown report (`review_report.md`) that summarizes all findings with code snippets, severity levels, and AI suggestions.
--   **Git Integration**: Can be pointed at a specific commit to analyze only the files that have changed.
--   **Human-in-the-Loop**: Includes a mechanism to save human feedback, creating a foundation for a continuous learning system.
+It operates in three modes:
+1.  **CLI Tool**: For quick local scans.
+2.  **Web Dashboard**: A modern SaaS-like interface for visualizing code health.
+3.  **GitHub Action**: Automated PR reviews in your CI/CD pipeline.
 
-## ⚙️ How It Works
+## ✨ Key Features
 
-The AI Code Review Copilot follows a multi-stage pipeline for each Python file it analyzes:
+-   **🧠 Context-Aware AI**: Uses Google Gemini Pro + RAG to understand your entire codebase, not just single files.
+-   **🛡️ Security First**: Integrated `bandit` scanning to catch vulnerabilities (SQLi, hardcoded secrets, etc.).
+-   **📉 Smart Risk Prediction**: Calculates **Cyclomatic Complexity** to mathematically predict bug-prone areas.
+-   **🔧 Auto-Fixer**: Doesn't just find bugs—suggests the exact code to fix them.
+-   **📊 Visual Dashboard**: A dark-themed Next.js dashboard to track issues and AI feedback.
 
-1.  **File Gathering**: Collects all `.py` files from the target directory or from a specific Git commit.
-2.  **Static & Security Analysis**: Runs `flake8` and `bandit` on each file to catch common issues and vulnerabilities.
-3.  **Code Intelligence**: Parses the code into an AST and uses custom detectors to find complex patterns and potential bugs.
-4.  **ML Severity Prediction**: Each issue found is passed through a machine learning model to classify its severity (e.g., `LOW`, `MEDIUM`, `HIGH`).
-5.  **AI Review**: A code snippet is sent to the Google Gemini API, which provides an overall review and suggestions for improvement.
-6.  **Report Generation**: All findings are compiled into a single, easy-to-read Markdown report.
+---
 
-## 🚀 Getting Started
+## 🛠️ Installation
 
 ### Prerequisites
-
 -   Python 3.9+
--   Git (for commit-based analysis)
+-   Node.js 18+ (for Dashboard)
+-   Google Gemini API Key ([Get one here](https://aistudio.google.com/app/apikey))
 
-### 1. Installation
-
-Clone the repository and install the required Python packages from `requirements.txt`:
-
+### 1. Clone & Setup
 ```bash
 git clone https://github.com/codewithabhi8/AI_Code_Review_Copilot.git
 cd AI_Code_Review_Copilot
+
+# Install Python dependencies
 pip install -r requirements.txt
 ```
 
-### 2. Configuration
+### 2. Configure Environment
+Create a `.env` file in the root directory:
 
-This project uses the Google Gemini API for AI-powered reviews. You will need to obtain an API key and configure it as an environment variable.
-
-1.  Get your API key from [Google AI Studio](https://aistudio.google.com/app/apikey).
-2.  Set the environment variable `GEMINI_API_KEY`.
-
-    -   On Windows:
-        ```powershell
-        $env:GEMINI_API_KEY="your_api_key_here"
-        ```
-    -   On macOS/Linux:
-        ```bash
-        export GEMINI_API_KEY="your_api_key_here"
-        ```
-
-    To make the key permanent, add it to your system's environment variables or your shell's profile file (e.g., `.bashrc`, `.zshrc`).
-
-## ▶️ Usage
-
-Run the copilot from the command line, pointing it to a Python file or a directory.
-
-### Analyze a Directory
-
+**For Google Gemini (Default)**
 ```bash
-python main.py ./path/to/your/code
+AI_PROVIDER="gemini"
+GEMINI_API_KEY="your_google_api_key_here"
 ```
 
-### Analyze a Single File
-
+**For OpenAI (GPT-4)**
 ```bash
-python main.py ./path/to/your/file.py
+AI_PROVIDER="openai"
+OPENAI_API_KEY="sk-..."
 ```
 
-### Analyze Changed Files in a Git Commit
+---
 
-To analyze only the Python files changed in a specific Git commit:
+## 🏃‍♂️ Usage
 
+### Option A: Web Dashboard (Recommended)
+Run the full-stack application to visualize your code reviews.
+
+**1. Start the Backend (FastAPI)**
 ```bash
-python main.py . <commit-hash>
+uvicorn app.main:app --reload
 ```
 
-After the analysis is complete, a detailed report named `review_report.md` will be generated in the project's root directory.
+**2. Start the Frontend (Next.js)**
+Open a new terminal:
+```bash
+cd dashboard
+npm install  # First time only
+npm run dev
+```
+Visit **[http://localhost:3000](http://localhost:3000)** to use the tool.
 
-## 📄 Sample Report
+### Option B: Command Line Interface (CLI)
+Run quick scans directly from your terminal.
 
-Here is a condensed example of what a report looks like:
+**Standard Scan (Fast & Free)**
+Uses static analysis and complexity metrics.
+```bash
+python main.py ./path/to/your/file_or_folder
+```
+
+**Deep Scan (AI + RAG)**
+Indexes your codebase for context-aware AI feedback.
+```bash
+python main.py ./path/to/your/file_or_folder --deep
+```
+
+### Option C: GitHub Action
+Add this to your repository to automatically review Pull Requests.
+
+Create `.github/workflows/review.yml`:
+```yaml
+name: AI Code Review
+on: [pull_request]
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Run AI Copilot
+        uses: codewithabhi8/AI_Code_Review_Copilot@main
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+```
 
 ---
 
-# 🧑‍💻 AI Code Review Report
+## 🏗️ Architecture
 
-**Generated at:** 2025-09-20 18:30:00
-
----
-
-## 📂 File: `data/sample_repo/insecure.py`
-
-### ✅ Static Analysis + ML Severity
-
-| Line | Col | Issue         | Severity |
-| ---- | --- | ------------- | -------- |
-| 2    | 5   | `eval()` used | 🚨 HIGH  |
-
-'''python
-def unsafe_eval(user_input):
-eval(user_input) # security risk
-'''
-
-### 🔒 Security Analysis
-
-| Severity | Issue                     | Line |
-| -------- | ------------------------- | ---- |
-| ❗ HIGH  | Use of `eval` is insecure | 2    |
-
-### 🤖 AI Suggestions
-
-The use of `eval()` on user-provided input is a significant security vulnerability. A malicious user could execute arbitrary code. Consider using a safer alternative like `ast.literal_eval` for parsing simple data structures, or refactor the logic to avoid evaluating dynamic expressions entirely.
+-   **Core Engine**: Python (`flake8`, `bandit`, `radon`, `langchain`)
+-   **Backend**: FastAPI
+-   **Frontend**: Next.js + Tailwind CSS
+-   **Database (Vector)**: ChromaDB (for RAG)
+-   **LLM**: Google Gemini 1.5 Flash
 
 ---
 
-## ⚖️ License
-
-This project is licensed under the MIT License. See the `LICENSE` file for details.
-
----
+## 📄 License
+MIT License. Free to use for personal and commercial projects.

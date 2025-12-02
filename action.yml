@@ -1,0 +1,30 @@
+name: 'AI Code Review Copilot'
+description: 'Automated code review using AI and static analysis'
+inputs:
+  token:
+    description: 'GitHub Token'
+    required: true
+  gemini_api_key:
+    description: 'Google Gemini API Key'
+    required: false
+  openai_api_key:
+    description: 'OpenAI API Key'
+    required: false
+  ai_provider:
+    description: 'AI Provider (gemini or openai)'
+    required: false
+    default: 'gemini'
+  path:
+    description: 'Path to analyze'
+    required: false
+    default: '.'
+runs:
+  using: 'docker'
+  image: 'Dockerfile'
+  args:
+    - ${{ inputs.path }}
+  env:
+    GITHUB_TOKEN: ${{ inputs.token }}
+    GEMINI_API_KEY: ${{ inputs.gemini_api_key }}
+    OPENAI_API_KEY: ${{ inputs.openai_api_key }}
+    AI_PROVIDER: ${{ inputs.ai_provider }}
