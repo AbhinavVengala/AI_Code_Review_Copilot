@@ -1,0 +1,41 @@
+name: Reusable AI Code Review
+
+on:
+  workflow_call:
+    inputs:
+      target_path:
+        description: 'The path to the code to be analyzed'
+        required: false
+        default: '.'
+        type: string
+    secrets:
+      GEMINI_API_KEY:
+        description: 'The Google Gemini API key for AI analysis'
+        required: true
+
+jobs:
+  ai-code-review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          path: 'user-repo'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+
+      - name: Run AI Code Review Copilot
+        uses: codewithabhi8/AI_Code_Review_Copilot@main
+        with:
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          target_path: 'user-repo/${{ inputs.target_path }}'
+
+      - name: Upload review report
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-code-review-report
+          path: review_report.md
+          if-no-files-found: error
