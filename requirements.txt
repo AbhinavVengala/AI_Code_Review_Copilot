@@ -12,3 +12,5 @@ uvicorn
 PyGithub
 langchain-openai
 python-multipart
+requests
+

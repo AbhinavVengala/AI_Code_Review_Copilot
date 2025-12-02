@@ -141,6 +141,8 @@ def analyze_code_endpoint(request: AnalyzeRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+from core.report_generator import generate_html_report
+
 async def process_github_analysis_background(repo_url: str, email: str, use_rag: bool):
     """
     Background task to analyze GitHub repo and send email.
@@ -169,12 +171,18 @@ async def process_github_analysis_background(repo_url: str, email: str, use_rag:
             send_email_report(email, repo_url, "No Python files found in repository.")
             return
 
+        results = {}
         report_lines = []
+        
         for file_path in files:
             try:
                 rel_name = os.path.relpath(file_path, tmp_dir)
-                static, security, feedback, practices = analyze_file(file_path, use_rag=use_rag)
+                # analyze_file returns: static_issues, bandit_issues, ai_feedback, best_practices
+                analysis_result = analyze_file(file_path, use_rag=use_rag)
+                results[rel_name] = analysis_result
                 
+                # For plain text fallback
+                static, security, feedback, practices = analysis_result
                 report_lines.append(f"### File: {rel_name}")
                 report_lines.append(f"**Static Issues**: {len(static)}")
                 report_lines.append(f"**Security Issues**: {len(security)}")
@@ -182,10 +190,13 @@ async def process_github_analysis_background(repo_url: str, email: str, use_rag:
                 report_lines.append(feedback)
                 report_lines.append("\n---\n")
             except Exception as e:
-                report_lines.append(f"Error analyzing {rel_name}: {str(e)}")
+                print(f"Error analyzing {file_path}: {e}")
+                report_lines.append(f"Error analyzing {os.path.basename(file_path)}: {str(e)}")
 
-        full_report = "\n".join(report_lines)
-        send_email_report(email, repo_url, full_report)
+        full_report_text = "\n".join(report_lines)
+        full_report_html = generate_html_report(results)
+        
+        send_email_report(email, repo_url, full_report_text, html_content=full_report_html)
         print(f"✅ Background analysis complete for {repo_url}")
 
     except Exception as e:
