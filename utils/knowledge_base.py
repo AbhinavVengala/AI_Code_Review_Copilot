@@ -56,7 +56,6 @@ def retrieve_context(query: str, k=3):
     """
     Retrieves the most relevant code chunks for a given query.
     """
-    global vector_store
     if not vector_store:
         return ""
     
