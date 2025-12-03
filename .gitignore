@@ -187,6 +187,8 @@ dashboard.db
 dashboard.db-journal
 review_report.md
 pytest_output_full.txt
+test_output.txt
+run_tests_debug.py
 temp_clone*/
 htmlcov/
 .coverage
