@@ -234,6 +234,7 @@ class TestAnalyzeGithubEndpoint:
         assert "queued" in data["message"].lower()
         assert "user@test.com" in data["message"]
     
+    @pytest.mark.asyncio
     @patch('asyncio.create_subprocess_exec')
     async def test_github_analysis_streaming(self, mock_subprocess):
         """Test GitHub analysis with streaming response."""
@@ -255,6 +256,7 @@ class TestAnalyzeGithubEndpoint:
             # Should return streaming response
             assert response.status_code == 200
     
+    @pytest.mark.asyncio
     @patch('asyncio.create_subprocess_exec')
     async def test_github_clone_failure(self, mock_subprocess):
         """Test handling of git clone failure."""
