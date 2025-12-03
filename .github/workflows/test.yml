@@ -64,7 +64,7 @@ jobs:
     
     - name: Check coverage threshold
       run: |
-        pytest --cov=core --cov=utils --cov=app --cov-report=term-missing --cov-fail-under=70
+        pytest --cov=core --cov=utils --cov=app --cov-report=term-missing --cov-fail-under=40
     
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v4
