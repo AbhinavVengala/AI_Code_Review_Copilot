@@ -61,6 +61,45 @@ OPENAI_API_KEY="sk-..."
 
 ---
 
+## 🧪 Testing
+
+This project includes comprehensive automated tests to ensure code quality.
+
+### Running Tests
+
+**Install test dependencies:**
+```bash
+pip install -r requirements.txt
+```
+
+**Run all tests:**
+```bash
+pytest
+```
+
+**Run with coverage:**
+```bash
+pytest --cov=core --cov=utils --cov=app --cov-report=html --cov-report=term-missing
+```
+
+**Run specific test types:**
+```bash
+pytest tests/unit/              # Unit tests only
+pytest tests/integration/       # Integration tests only
+pytest -m "not slow"            # Skip slow tests
+```
+
+**View coverage report:**
+```bash
+# Open htmlcov/index.html in your browser
+```
+
+### CI/CD
+
+Tests automatically run on every push/PR via GitHub Actions. See `.github/workflows/test.yml` for details.
+
+---
+
 ## 🏃‍♂️ Usage
 
 ### Option A: Web Dashboard (Recommended)

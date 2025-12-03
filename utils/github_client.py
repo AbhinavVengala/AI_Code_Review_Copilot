@@ -1,6 +1,9 @@
 import os
 import json
 from github import Github
+from core.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 def post_pr_comment(report_content):
     """
@@ -11,7 +14,7 @@ def post_pr_comment(report_content):
     event_path = os.getenv("GITHUB_EVENT_PATH")
 
     if not token or not repo_name or not event_path:
-        print("⚠️ GitHub environment variables missing. Skipping PR comment.")
+        logger.warning("github_pr_comment_skipped", reason="missing_environment_variables")
         return
 
     try:
@@ -21,7 +24,7 @@ def post_pr_comment(report_content):
         # Check if it's a pull request event
         pr_number = event_data.get("pull_request", {}).get("number")
         if not pr_number:
-            print("⚠️ Not a Pull Request event. Skipping comment.")
+            logger.info("github_pr_comment_skipped", reason="not_pr_event")
             return
 
         g = Github(token)
@@ -30,7 +33,7 @@ def post_pr_comment(report_content):
         
         # Post the comment
         pr.create_issue_comment(report_content)
-        print(f"✅ Posted review report to PR #{pr_number}")
+        logger.info("github_pr_comment_posted", pr_number=pr_number, repo=repo_name)
 
     except Exception as e:
-        print(f"❌ Failed to post PR comment: {e}")
+        logger.error("github_pr_comment_failed", error=str(e), exc_info=True)

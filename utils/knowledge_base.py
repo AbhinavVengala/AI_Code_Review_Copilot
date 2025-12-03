@@ -4,6 +4,9 @@ from langchain_community.vectorstores import Chroma
 from core.llm_factory import get_embeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
+from core.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 # Global vector store instance
 vector_store = None
@@ -13,7 +16,7 @@ def build_index(directory: str):
     Scans the directory for Python files, chunks them, and builds a vector index.
     """
     global vector_store
-    print("🔄 Building RAG Knowledge Base... (this may take a moment)")
+    logger.info("rag_index_building_started", directory=directory)
     
     documents = []
     files = glob.glob(os.path.join(directory, "**/*.py"), recursive=True)
@@ -26,10 +29,10 @@ def build_index(directory: str):
                 doc = Document(page_content=content, metadata={"source": file_path})
                 documents.append(doc)
         except Exception as e:
-            print(f"⚠️ Could not read {file_path}: {e}")
+            logger.warning("file_read_failed", file=file_path, error=str(e))
 
     if not documents:
-        print("⚠️ No documents found to index.")
+        logger.warning("rag_index_no_documents")
         return
 
     # Split text into chunks (functions/classes usually fit in 1000 chars)
@@ -39,14 +42,14 @@ def build_index(directory: str):
     try:
         embeddings = get_embeddings()
         if not embeddings:
-            print("❌ Embeddings model not configured. Check AI_PROVIDER.")
+            logger.error("rag_embeddings_unavailable")
             return
 
         # Create a transient in-memory vector store for this session
         vector_store = Chroma.from_documents(chunks, embeddings)
-        print(f"✅ Indexed {len(chunks)} code chunks.")
+        logger.info("rag_index_complete", chunk_count=len(chunks), document_count=len(documents))
     except Exception as e:
-        print(f"❌ Failed to create vector store: {e}")
+        logger.error("rag_index_failed", error=str(e), exc_info=True)
         vector_store = None
 
 def retrieve_context(query: str, k=3):
@@ -62,5 +65,5 @@ def retrieve_context(query: str, k=3):
         context = "\n\n".join([f"File: {d.metadata['source']}\nCode:\n{d.page_content}" for d in docs])
         return context
     except Exception as e:
-        print(f"⚠️ Retrieval failed: {e}")
+        logger.error("rag_retrieval_failed", error=str(e))
         return ""

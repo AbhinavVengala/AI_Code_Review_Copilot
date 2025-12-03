@@ -9,10 +9,13 @@ from code_analysis.pattern_recognition import detect_patterns
 from ml_models.bug_predictor import analyze_complexity, predict_risk_for_line
 from feedback.best_practice_recommender import recommend_best_practices
 from utils.knowledge_base import retrieve_context
+from core.logging_config import get_logger
 
 load_dotenv()
 
 from core.llm_factory import get_llm
+
+logger = get_logger(__name__)
 
 load_dotenv()
 
@@ -51,7 +54,7 @@ def run_flake8(file_path):
                 "text": text
             })
     
-    print(f"DEBUG ISSUES FOUND: {len(issues)}")
+    logger.debug("flake8_analysis_complete", file=file_path, issue_count=len(issues))
     return issues
 
 def run_bandit(file_path):
@@ -87,11 +90,15 @@ def ai_review(code_snippet: str, context: str = ""):
     """
     try:
         response = llm.invoke(prompt)
-        return response.content if hasattr(response, "content") else str(response)
+        result = response.content if hasattr(response, "content") else str(response)
+        logger.debug("ai_review_complete", code_length=len(code_snippet), response_length=len(result))
+        return result
     except Exception as e:
         error_msg = str(e)
         if "API Key not found" in error_msg or "400" in error_msg:
+            logger.error("ai_review_failed", error="invalid_api_key", details=error_msg)
             return "⚠️ **AI Review Unavailable**: Invalid or missing API Key. Please check your `.env` file and ensure `GEMINI_API_KEY` is set correctly."
+        logger.error("ai_review_failed", error=error_msg, exc_info=True)
         return f"⚠️ AI review failed: {error_msg}"
 
 def analyze_file(file_path, use_rag=False):

@@ -2,6 +2,9 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import os
+from core.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 def send_email_report(to_email: str, repo_url: str, report_content: str, html_content: str = None):
     """
@@ -13,7 +16,7 @@ def send_email_report(to_email: str, repo_url: str, report_content: str, html_co
     smtp_password = os.getenv("SMTP_PASSWORD")
 
     if not smtp_user or not smtp_password:
-        print("❌ SMTP credentials not configured. Skipping email.")
+        logger.warning("email_send_skipped", reason="missing_smtp_credentials")
         return False
 
     msg = MIMEMultipart("alternative")
@@ -35,13 +38,14 @@ def send_email_report(to_email: str, repo_url: str, report_content: str, html_co
         msg.attach(MIMEText(html_content, "html"))
 
     try:
+        logger.info("email_sending", recipient=to_email, smtp_server=smtp_server)
         server = smtplib.SMTP(smtp_server, smtp_port)
         server.starttls()
         server.login(smtp_user, smtp_password)
         server.sendmail(smtp_user, to_email, msg.as_string())
         server.quit()
-        print(f"✅ Email sent to {to_email}")
+        logger.info("email_sent", recipient=to_email, repo=repo_url)
         return True
     except Exception as e:
-        print(f"❌ Failed to send email: {e}")
+        logger.error("email_send_failed", recipient=to_email, error=str(e), exc_info=True)
         return False

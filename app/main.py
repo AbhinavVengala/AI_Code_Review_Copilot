@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File, BackgroundTasks
+from fastapi import FastAPI, HTTPException, UploadFile, File, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
 import os
 import shutil
@@ -6,12 +6,17 @@ import subprocess
 import glob
 from pathlib import Path
 import tempfile
+import uuid
 from app.models import AnalyzeRequest, AnalyzeResponse, Issue, SecurityIssue, GithubAnalyzeRequest
 from core.analyzer import analyze_file
 from fastapi.responses import StreamingResponse
 import json
 import asyncio
 from utils.email_sender import send_email_report
+from core.logging_config import get_logger
+import time
+
+logger = get_logger(__name__)
 
 app = FastAPI(title="AI Code Review Copilot API")
 
@@ -22,6 +27,36 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Request logging middleware with correlation IDs
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    request_id = str(uuid.uuid4())
+    request.state.request_id = request_id
+    
+    start_time = time.time()
+    logger.info(
+        "request_started",
+        request_id=request_id,
+        method=request.method,
+        path=request.url.path,
+        client=request.client.host if request.client else None
+    )
+    
+    response = await call_next(request)
+    
+    duration = time.time() - start_time
+    logger.info(
+        "request_completed",
+        request_id=request_id,
+        method=request.method,
+        path=request.url.path,
+        status_code=response.status_code,
+        duration_seconds=round(duration, 3)
+    )
+    
+    response.headers["X-Request-ID"] = request_id
+    return response
 
 @app.get("/health")
 def health_check():
@@ -147,7 +182,7 @@ async def process_github_analysis_background(repo_url: str, email: str, use_rag:
     """
     Background task to analyze GitHub repo and send email.
     """
-    print(f"📧 Starting background analysis for {repo_url} -> {email}")
+    logger.info("github_analysis_started", repo_url=repo_url, email=email, use_rag=use_rag)
     tmp_dir = tempfile.mkdtemp()
     try:
         # Clone repo
@@ -190,17 +225,17 @@ async def process_github_analysis_background(repo_url: str, email: str, use_rag:
                 report_lines.append(feedback)
                 report_lines.append("\n---\n")
             except Exception as e:
-                print(f"Error analyzing {file_path}: {e}")
+                logger.error("file_analysis_failed", file=file_path, error=str(e))
                 report_lines.append(f"Error analyzing {os.path.basename(file_path)}: {str(e)}")
 
         full_report_text = "\n".join(report_lines)
         full_report_html = generate_html_report(results)
         
         send_email_report(email, repo_url, full_report_text, html_content=full_report_html)
-        print(f"✅ Background analysis complete for {repo_url}")
+        logger.info("github_analysis_complete", repo_url=repo_url, file_count=len(results))
 
     except Exception as e:
-        print(f"❌ Background analysis failed: {e}")
+        logger.error("github_analysis_failed", repo_url=repo_url, error=str(e), exc_info=True)
         send_email_report(email, repo_url, f"Analysis failed: {str(e)}")
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
@@ -221,7 +256,7 @@ async def analyze_github_endpoint(request: GithubAnalyzeRequest, background_task
             env = os.environ.copy()
             env["GIT_TERMINAL_PROMPT"] = "0"
             
-            print(f"🔄 Cloning {request.repo_url} to {tmp_dir}...")
+            logger.info("repository_cloning", repo_url=request.repo_url, temp_dir=tmp_dir)
             process = await asyncio.create_subprocess_exec(
                 "git", "clone", "--depth", "1", "--single-branch", request.repo_url, tmp_dir,
                 stdout=asyncio.subprocess.PIPE,

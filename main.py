@@ -17,6 +17,9 @@ from core.report_generator import generate_report
 from utils.git_integration import get_changed_files
 from utils.knowledge_base import build_index
 from utils.github_client import post_pr_comment
+from core.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 LANGUAGE_TOOLS = {
     "python": {
@@ -59,12 +62,12 @@ def post_results_to_dashboard(results):
         })
 
     try:
-        print("📈 Posting results to dashboard...")
+        logger.info("posting_to_dashboard", endpoint=api_endpoint, file_count=len(payload))
         response = requests.post(api_endpoint, json=payload, headers=headers, timeout=15)
         response.raise_for_status()
-        print("✅ Results successfully posted to dashboard.")
+        logger.info("dashboard_post_success")
     except requests.exceptions.RequestException as e:
-        print(f"⚠️ Warning: Could not post results to dashboard: {e}")
+        logger.warning("dashboard_post_failed", error=str(e))
 
 def main():
     parser = argparse.ArgumentParser(description="AI Code Review Copilot")
@@ -80,7 +83,7 @@ def main():
         # Handle Git URL
         if target_path.startswith(("http://", "https://")) and "github.com" in target_path:
             temp_dir = tempfile.mkdtemp(prefix="ai_code_review_")
-            print(f"Cloning repository from {target_path} into {temp_dir}...")
+            logger.info("cloning_repository", repo_url=target_path, temp_dir=temp_dir)
             try:
                 subprocess.run(
                     ["git", "clone", "--depth", "1", target_path, "."],
@@ -88,7 +91,7 @@ def main():
                 )
                 target_path = temp_dir
             except subprocess.CalledProcessError as e:
-                print(f"❌ Failed to clone repository: {e.stderr}")
+                logger.error("repository_clone_failed", repo_url=target_path, error=e.stderr)
                 return
 
         # Build RAG index if deep mode is enabled
@@ -105,12 +108,12 @@ def main():
             files = gather_files(target_path)
 
         if not files:
-            print(f"❌ No supported files found in the target path: {target_path}")
+            logger.warning("no_files_found", path=target_path)
             return
 
         results = {}
         for file_path in files:
-            print(f"🔍 Analyzing {file_path}...")
+            logger.info("analyzing_file", file=file_path, use_rag=args.deep)
             # analyze_file returns: combined_issues, bandit_issues, ai_feedback, best_practices
             analysis_result = analyze_file(file_path, use_rag=args.deep)
             results[file_path] = analysis_result
@@ -120,7 +123,7 @@ def main():
         output_file = "review_report.md"
         with open(output_file, "w", encoding="utf-8") as f:
             f.write(report)
-        print(f"\n✅ Review completed. Report saved to {output_file}")
+        logger.info("report_generated", output_file=output_file, file_count=len(results))
 
         # Post to dashboard
         post_results_to_dashboard(results)

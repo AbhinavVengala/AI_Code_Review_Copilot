@@ -1,0 +1,113 @@
+name: Tests and Coverage
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        python-version: ['3.9', '3.10', '3.11']
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Cache dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Run linting
+      run: |
+        pip install flake8
+        # Stop the build if there are Python syntax errors or undefined names
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --exclude=node_modules,dashboard,temp_clone_*,.venv,venv
+        # Exit-zero treats all errors as warnings
+        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics --exclude=node_modules,dashboard,temp_clone_*,.venv,venv
+    
+    - name: Run unit tests
+      env:
+        AI_PROVIDER: gemini
+        GEMINI_API_KEY: test_key_for_ci
+        SMTP_SERVER: smtp.test.com
+        SMTP_PORT: 587
+        SMTP_USER: test@test.com
+        SMTP_PASSWORD: test_password
+      run: |
+        pytest tests/unit -v --cov=core --cov=utils --cov=app --cov-report=xml --cov-report=term-missing
+    
+    - name: Run integration tests
+      env:
+        AI_PROVIDER: gemini
+        GEMINI_API_KEY: test_key_for_ci
+      run: |
+        pytest tests/integration -v
+    
+    - name: Check coverage threshold
+      run: |
+        pytest --cov=core --cov=utils --cov=app --cov-report=term-missing --cov-fail-under=70
+    
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+    
+    - name: Generate coverage badge
+      if: matrix.python-version == '3.9'
+      run: |
+        pip install coverage-badge
+        coverage-badge -o coverage.svg -f
+    
+    - name: Archive coverage reports
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: coverage-report
+        path: htmlcov/
+
+  security-scan:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+    
+    - name: Install bandit
+      run: pip install bandit
+    
+    - name: Run security scan
+      run: |
+        bandit -r core/ utils/ app/ -f json -o bandit-report.json || true
+    
+    - name: Upload security report
+      uses: actions/upload-artifact@v3
+      with:
+        name: security-report
+        path: bandit-report.json
